@@ -1,12 +1,12 @@
 [package]
-name = "logi-battery-tray"
+name = "battery-monitor"
 version = "0.1.0"
 edition = "2024"
 description = "Tray icon showing battery levels of wireless peripherals"
 authors = ["alexwilliams0712"]
 publish = false
 license = "PolyForm-Strict-1.0.0"
-repository = "https://github.com/alexwilliams0712/logi-battery-tray"
+repository = "https://github.com/alexwilliams0712/battery-monitor"
 
 [dependencies]
 anyhow = "1.0.104"
@@ -18,7 +18,7 @@ zbus = { version = "5", default-features = false, features = ["tokio"] }
 section = "utils"
 depends = "$auto, upower"
 assets = [
-    ["target/release/logi-battery-tray", "usr/bin/", "755"],
-    ["logi-battery-tray.desktop", "etc/xdg/autostart/", "644"],
-    ["README.md", "usr/share/doc/logi-battery-tray/", "644"],
+    ["target/release/battery-monitor", "usr/bin/", "755"],
+    ["battery-monitor.desktop", "etc/xdg/autostart/", "644"],
+    ["README.md", "usr/share/doc/battery-monitor/", "644"],
 ]

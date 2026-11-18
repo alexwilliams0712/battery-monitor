@@ -1,7 +1,7 @@
-# logi-battery-tray
+# battery-monitor
 
-Tray icon showing battery levels of wireless peripherals, such as Logitech
-Lightspeed and Unifying devices.
+Tray icon showing battery levels of wireless peripherals,
+such as mice, keyboards and headsets.
 A Rust port of the idea behind
 [Wireless-Device-Battery-Monitor](https://github.com/krisgfx9/Wireless-Device-Battery-Monitor)
 for Ubuntu and macOS.
@@ -10,6 +10,8 @@ for Ubuntu and macOS.
 
 The kernel `hid-logitech-hidpp` driver already reads HID++ battery data and
 UPower republishes it, so this app only reads UPower over D-Bus.
+Any other peripheral UPower knows about, such as a Bluetooth headset,
+shows up too.
 No udev rules or root access are needed.
 
 - The top bar shows each device and its level, e.g. `G502 12%  G915 TKL 37%`.
@@ -19,11 +21,11 @@ No udev rules or root access are needed.
 - Levels refresh every 30 seconds.
 
 Install the `.deb` from the
-[latest release](https://github.com/alexwilliams0712/logi-battery-tray/releases/latest):
+[latest release](https://github.com/alexwilliams0712/battery-monitor/releases/latest):
 
 ```sh
-sudo apt install ./logi-battery-tray_*_amd64.deb
-logi-battery-tray &
+sudo apt install ./battery-monitor_*_amd64.deb
+battery-monitor &
 ```
 
 It starts automatically at every login after that.
@@ -31,9 +33,9 @@ It starts automatically at every login after that.
 To build from source instead:
 
 ```sh
-cargo install --git https://github.com/alexwilliams0712/logi-battery-tray
-sed "s|^Exec=.*|Exec=$HOME/.cargo/bin/logi-battery-tray|" logi-battery-tray.desktop \
-  > ~/.config/autostart/logi-battery-tray.desktop
+cargo install --git https://github.com/alexwilliams0712/battery-monitor
+sed "s|^Exec=.*|Exec=$HOME/.cargo/bin/battery-monitor|" battery-monitor.desktop \
+  > ~/.config/autostart/battery-monitor.desktop
 ```
 
 Check what UPower sees with `upower -d`.
