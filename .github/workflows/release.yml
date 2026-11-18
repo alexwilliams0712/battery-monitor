@@ -1,0 +1,23 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  deb:
+    # Oldest supported runner, so the binary's glibc floor stays low.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check tag matches Cargo.toml version
+        run: test "$GITHUB_REF_NAME" = "v$(cargo pkgid | sed 's/.*[#@]//')"
+      - run: cargo install cargo-deb --locked
+      - run: cargo deb
+      - run: gh release create "$GITHUB_REF_NAME" target/debian/*.deb --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}

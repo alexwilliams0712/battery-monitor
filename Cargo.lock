@@ -104,6 +104,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
+name = "battery-monitor"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-hid",
+ "futures-lite",
+ "serde",
+ "tao",
+ "tokio",
+ "tray-icon",
+ "zbus",
+]
+
+[[package]]
 name = "bitflags"
 version = "2.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1085,20 +1099,6 @@ name = "log"
 version = "0.4.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
-
-[[package]]
-name = "logi-battery-tray"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-hid",
- "futures-lite",
- "serde",
- "tao",
- "tokio",
- "tray-icon",
- "zbus",
-]
 
 [[package]]
 name = "memchr"
