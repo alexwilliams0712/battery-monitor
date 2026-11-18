@@ -3,31 +3,81 @@
 Shows wireless peripheral battery levels in the Ubuntu top bar or macOS menu bar,
 e.g. `G502 12%  G915 TKL 37%`.
 With more than four devices it shows only the percentages.
-The menu lists each device with its charging state.
+Click it to see each device with its charging state.
 
 ## Ubuntu
 
-Shows every peripheral battery UPower reports.
+Works with Ubuntu 22.04 or newer on a 64-bit Intel or AMD PC.
+It shows every peripheral battery Ubuntu knows about.
 
-```sh
-sudo apt install ./battery-monitor_*_amd64.deb   # from the latest release
-battery-monitor &
-```
+1. Open the [latest release](https://github.com/alexwilliams0712/battery-monitor/releases/latest)
+   and download the file ending in `_amd64.deb`.
+2. Open Terminal (press Ctrl+Alt+T) and run:
 
-It starts at every login after that.
+   ```sh
+   sudo apt install ~/Downloads/battery-monitor_*_amd64.deb
+   setsid -f battery-monitor
+   ```
+
+   Type your password when asked. Nothing appears on screen as you type.
+3. Your battery levels appear at the top right of the screen.
+   It starts by itself every time you log in.
+
+To uninstall, run `sudo apt remove battery-monitor`.
 
 ## macOS
 
-Reads Logitech Unifying, Lightspeed and Bolt receivers over HID++.
+Works with Logitech devices that use a Unifying, Lightspeed or Bolt USB receiver.
+Devices paired over Bluetooth are not shown.
+
+1. Open Terminal (press Cmd+Space, type `Terminal`, press Return).
+2. Install Apple's developer tools, then click Install in the window that opens:
+
+   ```sh
+   xcode-select --install
+   ```
+
+3. Install Rust. Press Return to accept the defaults:
+
+   ```sh
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   source "$HOME/.cargo/env"
+   ```
+
+4. Build and install battery-monitor. This takes a few minutes:
+
+   ```sh
+   cargo install --git https://github.com/alexwilliams0712/battery-monitor
+   ```
+
+5. Start it now and at every login:
+
+   ```sh
+   mkdir -p ~/Library/LaunchAgents
+   cat > ~/Library/LaunchAgents/com.alexwilliams0712.battery-monitor.plist <<EOF
+   <?xml version="1.0" encoding="UTF-8"?>
+   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+   <plist version="1.0"><dict>
+   <key>Label</key><string>com.alexwilliams0712.battery-monitor</string>
+   <key>ProgramArguments</key><array><string>$HOME/.cargo/bin/battery-monitor</string></array>
+   <key>RunAtLoad</key><true/>
+   </dict></plist>
+   EOF
+   launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.alexwilliams0712.battery-monitor.plist
+   ```
+
+6. Your battery levels appear in the menu bar at the top right.
+   If it shows `Batteries` or an error instead, open System Settings >
+   Privacy & Security > Input Monitoring, turn on `battery-monitor`,
+   then log out and back in.
+
+To uninstall, run:
 
 ```sh
-cargo install --git https://github.com/alexwilliams0712/battery-monitor
-battery-monitor --hidpp   # read once and print
-battery-monitor &
+launchctl bootout "gui/$(id -u)/com.alexwilliams0712.battery-monitor"
+rm ~/Library/LaunchAgents/com.alexwilliams0712.battery-monitor.plist
+cargo uninstall battery-monitor
 ```
-
-If no devices appear, allow it in Privacy & Security > Input Monitoring.
-Add it to Login Items to start it at login.
 
 ## Releasing
 
