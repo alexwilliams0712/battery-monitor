@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=Logi Battery Tray
+Name=Battery Monitor
 Comment=Battery levels of wireless peripherals
-Exec=logi-battery-tray
+Exec=battery-monitor
 Icon=battery-good-symbolic
 Terminal=false
 NoDisplay=true
