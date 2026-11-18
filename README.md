@@ -21,8 +21,12 @@ cargo install --path .
 logi-battery-tray &
 ```
 
-To start it at login, add it to GNOME Startup Applications or
-`~/.config/autostart/`.
+To start it at login:
+
+```sh
+sed "s|^Exec=.*|Exec=$HOME/.cargo/bin/logi-battery-tray|" logi-battery-tray.desktop \
+  > ~/.config/autostart/logi-battery-tray.desktop
+```
 
 Check what UPower sees with `upower -d`.
 A device missing there needs a direct HID++ backend over hidraw.

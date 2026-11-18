@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Logi Battery Tray
+Comment=Battery levels of wireless peripherals
+Exec=logi-battery-tray
+Icon=battery-good-symbolic
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
