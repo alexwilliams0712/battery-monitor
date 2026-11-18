@@ -12,8 +12,10 @@ The kernel `hid-logitech-hidpp` driver already reads HID++ battery data and
 UPower republishes it, so this app only reads UPower over D-Bus.
 No udev rules or root access are needed.
 
+- The top bar shows each device and its level, e.g. `G502 12%  G915 TKL 37%`.
+  With more than four devices it shows only the percentages.
 - The icon shows the lowest battery.
-- The tooltip and menu list every device.
+- The menu lists every device with its charging state.
 - Levels refresh every 30 seconds.
 
 ```sh

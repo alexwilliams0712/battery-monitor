@@ -38,6 +38,13 @@ pub struct Battery {
     pub icon_name: String,
 }
 
+impl Battery {
+    /// Model without the vendor prefix UPower adds, e.g. `G502`.
+    pub fn short_name(&self) -> &str {
+        self.model.strip_prefix("Logitech ").unwrap_or(&self.model)
+    }
+}
+
 /// `org.freedesktop.UPower.Device.State`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
