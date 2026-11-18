@@ -1,4 +1,4 @@
-use core::fmt;
+use crate::battery::{Battery, State};
 use zbus::{Connection, zvariant::OwnedObjectPath};
 
 #[zbus::proxy(
@@ -29,34 +29,7 @@ trait Device {
     fn icon_name(&self) -> zbus::Result<String>;
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Battery {
-    pub model: String,
-    pub percentage: f64,
-    pub state: State,
-    /// Freedesktop icon name chosen by UPower for this level and state.
-    pub icon_name: String,
-}
-
-impl Battery {
-    /// Model without the vendor prefix UPower adds, e.g. `G502`.
-    pub fn short_name(&self) -> &str {
-        self.model.strip_prefix("Logitech ").unwrap_or(&self.model)
-    }
-}
-
 /// `org.freedesktop.UPower.Device.State`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum State {
-    Unknown,
-    Charging,
-    Discharging,
-    Empty,
-    FullyCharged,
-    PendingCharge,
-    PendingDischarge,
-}
-
 impl From<u32> for State {
     fn from(raw: u32) -> Self {
         match raw {
@@ -68,20 +41,6 @@ impl From<u32> for State {
             6 => Self::PendingDischarge,
             _ => Self::Unknown,
         }
-    }
-}
-
-impl fmt::Display for State {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Self::Unknown => "unknown",
-            Self::Charging => "charging",
-            Self::Discharging => "discharging",
-            Self::Empty => "empty",
-            Self::FullyCharged => "full",
-            Self::PendingCharge => "pending charge",
-            Self::PendingDischarge => "pending discharge",
-        })
     }
 }
 

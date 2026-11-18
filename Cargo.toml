@@ -5,6 +5,15 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.104"
-serde = { version = "1.0.229", features = ["derive"] }
+futures-lite = "2"
 tokio = { version = "1.54.1", features = ["rt", "macros", "time"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+async-hid = { version = "0.5.3", default-features = false, features = ["tokio"] }
+serde = { version = "1.0.229", features = ["derive"] }
 zbus = { version = "5", default-features = false, features = ["tokio"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+async-hid = { version = "0.5.3", default-features = false }
+tao = "0.37.2"
+tray-icon = "0.26.1"
