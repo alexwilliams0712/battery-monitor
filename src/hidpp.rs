@@ -10,9 +10,8 @@ const RECEIVERS: [u16; 11] = [
 ];
 const VENDOR_USAGE_PAGE: u16 = 0xff00;
 const PAIRED: RangeInclusive<u8> = 1..=6;
-/// Asleep or unpaired devices make the receiver answer with an error at once,
-/// so this only bounds a lost reply.
-const TIMEOUT: Duration = Duration::from_millis(500);
+/// The receiver takes up to about 2 s to report a sleeping device as unreachable.
+const TIMEOUT: Duration = Duration::from_secs(3);
 
 const SHORT: u8 = 0x10;
 const LONG: u8 = 0x11;
@@ -286,7 +285,9 @@ fn models() {
 }
 
 /// Batteries of devices paired with Logitech receivers, read over HID++ 2.0.
-pub async fn batteries() -> HidResult<Vec<Battery>> {
+/// Sleeping devices cannot answer, so they keep their reading from `last`,
+/// as the Linux kernel does.
+pub async fn batteries(last: &[Battery]) -> HidResult<Vec<Battery>> {
     let backend = HidBackend::default();
     let mut receivers = backend.enumerate().await?.filter(|it| {
         it.vendor_id == LOGITECH
@@ -303,17 +304,23 @@ pub async fn batteries() -> HidResult<Vec<Battery>> {
         seen.push(receiver.id.clone());
         let mut io = receiver.open().await?;
         for device in PAIRED {
-            out.extend(battery(&mut io, device).await?);
+            out.extend(battery(&mut io, device, last).await?);
         }
     }
     out.sort_by(|a, b| a.model.cmp(&b.model));
     Ok(out)
 }
 
-async fn battery(io: &mut DeviceReaderWriter, device: u8) -> HidResult<Option<Battery>> {
+async fn battery(
+    io: &mut DeviceReaderWriter,
+    device: u8,
+    last: &[Battery],
+) -> HidResult<Option<Battery>> {
     let ping = Request::feature(device, ROOT, 1, [0, 0, 0x5a]);
     if call(io, ping).await?.is_none() {
-        return Ok(None);
+        // The receiver knows a sleeping device's codename; an empty slot has none.
+        let asleep = codename(io, device).await?;
+        return Ok(asleep.and_then(|model| last.iter().find(|it| it.model == model).cloned()));
     }
     for (id, function, parse) in BATTERY_FEATURES {
         if let Some(index) = feature(io, device, id).await?
@@ -339,15 +346,17 @@ async fn feature(io: &mut DeviceReaderWriter, device: u8, id: u16) -> HidResult<
     Ok(reply.and_then(|[index, ..]| (index != 0).then_some(index)))
 }
 
-/// The receiver's codename, as Linux uses, else the device's marketing name.
+/// The model from the codename the receiver stores, as Linux uses.
+async fn codename(io: &mut DeviceReaderWriter, device: u8) -> HidResult<Option<String>> {
+    let reply = call(io, Request::codename(device)).await?;
+    Ok(reply.and_then(|[_, len, codename @ ..]| {
+        model(codename.get(..usize::from(len)).unwrap_or(&codename))
+    }))
+}
+
+/// The receiver's codename, else the device's marketing name.
 async fn name(io: &mut DeviceReaderWriter, device: u8) -> HidResult<String> {
-    if let Some([_, len, codename @ ..]) = call(io, Request::codename(device)).await?
-        && let Some(it) = model(
-            codename
-                .get(..usize::from(len))
-                .unwrap_or(codename.as_slice()),
-        )
-    {
+    if let Some(it) = codename(io, device).await? {
         return Ok(it);
     }
     if let Some(index) = feature(io, device, DEVICE_NAME).await?
