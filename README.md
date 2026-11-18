@@ -18,14 +18,20 @@ No udev rules or root access are needed.
 - The menu lists every device with its charging state.
 - Levels refresh every 30 seconds.
 
+Install the `.deb` from the
+[latest release](https://github.com/alexwilliams0712/logi-battery-tray/releases/latest):
+
 ```sh
-cargo install --path .
+sudo apt install ./logi-battery-tray_*_amd64.deb
 logi-battery-tray &
 ```
 
-To start it at login:
+It starts automatically at every login after that.
+
+To build from source instead:
 
 ```sh
+cargo install --git https://github.com/alexwilliams0712/logi-battery-tray
 sed "s|^Exec=.*|Exec=$HOME/.cargo/bin/logi-battery-tray|" logi-battery-tray.desktop \
   > ~/.config/autostart/logi-battery-tray.desktop
 ```
@@ -39,3 +45,8 @@ Planned.
 macOS has no kernel HID++ support, so it needs a direct HID++ backend
 (`hidapi`, features 0x1000/0x1001/0x1004) and a signed app bundle for the
 Input Monitoring permission.
+
+## Releasing
+
+Bump `version` in `Cargo.toml`, then push a matching `v*` tag.
+The release workflow builds the `.deb` and attaches it to a GitHub release.
