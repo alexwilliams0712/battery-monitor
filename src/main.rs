@@ -55,7 +55,7 @@ fn run() -> anyhow::Result<()> {
 #[cfg(target_os = "macos")]
 fn run() -> anyhow::Result<()> {
     let runtime = runtime()?;
-    menubar::run(move |updater| {
+    menubar::run(move |proxy| {
         std::thread::spawn(move || {
             runtime.block_on(async {
                 let mut ticker = tokio::time::interval(POLL);
@@ -65,7 +65,8 @@ fn run() -> anyhow::Result<()> {
                     if let Err(e) = &update {
                         eprintln!("update: {e}");
                     }
-                    updater.send(update);
+                    // Fails only once the event loop has exited, i.e. while quitting.
+                    let _ = proxy.send_event(update);
                 }
             })
         });

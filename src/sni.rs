@@ -132,7 +132,7 @@ impl Layout {
 }
 
 impl Menu {
-    fn items(&self) -> Vec<(i32, Props)> {
+    fn items(&self) -> impl Iterator<Item = (i32, Props)> + '_ {
         let devices = (FIRST_DEVICE_ID..).zip(&self.batteries).map(|(id, it)| {
             let props = Props::from([
                 ("label".into(), owned(line(it))),
@@ -154,7 +154,7 @@ impl Menu {
                 ]),
             ),
         ];
-        devices.chain(tail).collect()
+        devices.chain(tail)
     }
 }
 
@@ -163,15 +163,18 @@ impl Menu {
     fn get_layout(
         &self,
         parent_id: i32,
-        _recursion_depth: i32,
+        recursion_depth: i32,
         _property_names: Vec<String>,
     ) -> fdo::Result<(u32, Layout)> {
-        let mut items = self.items().into_iter();
+        let mut items = self.items();
         let layout = match parent_id {
             ROOT_ID => Layout {
                 id: ROOT_ID,
                 properties: Props::from([("children-display".into(), owned("submenu"))]),
-                children: items.map(|it| owned(Layout::leaf(it))).collect(),
+                children: match recursion_depth {
+                    0 => Vec::new(),
+                    _ => items.map(|it| owned(Layout::leaf(it))).collect(),
+                },
             },
             _ => items
                 .find(|(id, _)| *id == parent_id)
@@ -187,14 +190,12 @@ impl Menu {
         _property_names: Vec<String>,
     ) -> Vec<(i32, Props)> {
         self.items()
-            .into_iter()
             .filter(|(id, _)| ids.is_empty() || ids.contains(id))
             .collect()
     }
 
     fn get_property(&self, id: i32, name: &str) -> fdo::Result<OwnedValue> {
         self.items()
-            .into_iter()
             .find(|(it, _)| *it == id)
             .and_then(|(_, mut props)| props.remove(name))
             .ok_or_else(|| fdo::Error::InvalidArgs("unknown menu property".into()))

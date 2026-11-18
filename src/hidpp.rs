@@ -36,10 +36,9 @@ const UNIFIED_BATTERY: u16 = 0x1004;
 /// Reply payload after the four header bytes, zero-padded.
 type Params = [u8; 16];
 
-/// Turns a battery reply into a percentage and state.
 type Parse = fn(Params) -> (f64, State);
 
-/// Battery features by preference, with the function that reads the level.
+/// Battery features in order of preference: id, function, parser.
 const BATTERY_FEATURES: [(u16, u8, Parse); 3] = [
     (UNIFIED_BATTERY, 1, unified),
     (BATTERY_STATUS, 0, battery_status),

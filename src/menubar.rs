@@ -6,33 +6,23 @@ use tao::{
 };
 use tray_icon::{
     TrayIcon, TrayIconBuilder,
-    menu::{IsMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem},
+    menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem},
 };
 
 const QUIT_ID: &str = "quit";
+const APPEND: &str = "appending to a fresh menu MUST succeed";
 /// Shown while there is nothing to report, so the item stays clickable.
 const FALLBACK_TITLE: &str = "Batteries";
 
 /// Batteries, or an error message to show in the menu.
 pub type Update = Result<Vec<Battery>, String>;
 
-/// Hands updates from the polling thread to the main thread.
-pub struct Updater(EventLoopProxy<Update>);
-
-impl Updater {
-    pub fn send(&self, update: Update) {
-        let Self(proxy) = self;
-        // Fails only once the event loop has exited, i.e. the app is quitting.
-        let _ = proxy.send_event(update);
-    }
-}
-
 /// Runs the AppKit event loop on the main thread; `spawn` starts the poller.
-pub fn run(spawn: impl FnOnce(Updater)) -> ! {
+pub fn run(spawn: impl FnOnce(EventLoopProxy<Update>)) -> ! {
     let mut event_loop = EventLoopBuilder::<Update>::with_user_event().build();
     // A menu bar item only: no Dock icon or app menu.
     event_loop.set_activation_policy(ActivationPolicy::Accessory);
-    spawn(Updater(event_loop.create_proxy()));
+    spawn(event_loop.create_proxy());
     MenuEvent::set_event_handler(Some(|event: MenuEvent| {
         if event.id == QUIT_ID {
             std::process::exit(0);
@@ -79,19 +69,12 @@ fn menu(update: &Update) -> Menu {
         Ok(batteries) => batteries.iter().map(line).collect(),
         Err(e) => vec![format!("Error: {e}")],
     };
-    let rows = rows
-        .iter()
-        .map(|it| MenuItem::new(it, false, None))
-        .collect::<Vec<_>>();
-    let separator = PredefinedMenuItem::separator();
-    let quit = MenuItem::with_id(QUIT_ID, "Quit", true, None);
     let menu = Menu::new();
-    rows.iter()
-        .map(|it| it as &dyn IsMenuItem)
-        .chain([&separator as &dyn IsMenuItem, &quit])
-        .for_each(|it| {
-            menu.append(it)
-                .expect("appending to a fresh menu MUST succeed");
-        });
+    for row in &rows {
+        menu.append(&MenuItem::new(row, false, None)).expect(APPEND);
+    }
+    let quit = MenuItem::with_id(QUIT_ID, "Quit", true, None);
+    menu.append_items(&[&PredefinedMenuItem::separator(), &quit])
+        .expect(APPEND);
     menu
 }
