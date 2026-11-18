@@ -43,11 +43,8 @@ fn run() -> anyhow::Result<()> {
         let mut ticker = tokio::time::interval(POLL);
         loop {
             ticker.tick().await;
-            let result = match upower::peripherals(&system).await {
-                Ok(batteries) => sni::update(&session, batteries).await,
-                Err(e) => Err(e),
-            };
-            if let Err(e) = result {
+            let batteries = upower::peripherals(&system).await;
+            if let Err(e) = async { sni::update(&session, batteries?).await }.await {
                 eprintln!("update: {e}");
             }
         }

@@ -163,7 +163,7 @@ fn charging(status: u8) -> State {
     match status {
         0 => State::Discharging,
         1 | 2 | 4 => State::Charging,
-        3 => State::FullyCharged,
+        3 => State::Full,
         _ => State::Unknown,
     }
 }
@@ -194,7 +194,7 @@ fn voltage(params: Params) -> (f64, State) {
     let [high, low, flags, ..] = params;
     let state = match (flags & 0x80 != 0, flags & 0x03) {
         (false, _) => State::Discharging,
-        (true, 1) => State::FullyCharged,
+        (true, 1) => State::Full,
         (true, _) => State::Charging,
     };
     let millivolts = u16::from_be_bytes([high, low]);
@@ -210,10 +210,7 @@ fn battery_replies() {
     };
     assert_eq!(unified(params(&[37, 4, 0])), (37.0, State::Discharging));
     assert_eq!(unified(params(&[0, 2, 1])), (20.0, State::Charging));
-    assert_eq!(
-        battery_status(params(&[50, 20, 3])),
-        (50.0, State::FullyCharged)
-    );
+    assert_eq!(battery_status(params(&[50, 20, 3])), (50.0, State::Full));
     // 3811 mV, discharging.
     assert_eq!(
         voltage(params(&[0x0e, 0xe3, 0x00])),
@@ -223,10 +220,7 @@ fn battery_replies() {
         voltage(params(&[0x0e, 0xe3, 0x80])),
         (50.0, State::Charging)
     );
-    assert_eq!(
-        voltage(params(&[0x0e, 0xe3, 0x81])),
-        (50.0, State::FullyCharged)
-    );
+    assert_eq!(voltage(params(&[0x0e, 0xe3, 0x81])), (50.0, State::Full));
 }
 
 /// Li-ion discharge curve from Solaar, in millivolts and percent.
