@@ -62,7 +62,6 @@ fn show(tray: &TrayIcon, update: &Update) {
     tray.set_menu(Some(Box::new(menu(update))));
 }
 
-/// One disabled row per device or the error, a separator and Quit.
 fn menu(update: &Update) -> Menu {
     let rows = match update {
         Ok(batteries) if batteries.is_empty() => vec!["No devices found".into()],

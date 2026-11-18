@@ -242,10 +242,9 @@ const CURVE: [(u16, u8); 13] = [
 /// Linear interpolation on [`CURVE`], clamped to 0..=100.
 fn voltage_percentage(millivolts: u16) -> u8 {
     CURVE
-        .iter()
-        .zip(CURVE.iter().skip(1))
-        .find(|(_, (low, _))| millivolts >= *low)
-        .map_or(0, |(&(v_high, p_high), &(v_low, p_low))| {
+        .array_windows()
+        .find(|[_, (low, _)]| millivolts >= *low)
+        .map_or(0, |&[(v_high, p_high), (v_low, p_low)]| {
             let t = (f64::from(millivolts - v_low) / f64::from(v_high - v_low)).min(1.0);
             let percent = f64::from(p_low) + f64::from(p_high - p_low) * t;
             // In 0..=100 by construction.

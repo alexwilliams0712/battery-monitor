@@ -7,7 +7,7 @@ The menu lists each device with its charging state.
 
 ## Ubuntu
 
-Reads UPower, so every peripheral battery in `upower -d` appears.
+Shows every peripheral battery UPower reports.
 
 ```sh
 sudo apt install ./battery-monitor_*_amd64.deb   # from the latest release
