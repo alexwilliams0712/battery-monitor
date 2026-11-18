@@ -34,11 +34,8 @@ impl From<u32> for State {
     fn from(raw: u32) -> Self {
         match raw {
             1 => Self::Charging,
-            2 => Self::Discharging,
-            3 => Self::Empty,
-            4 => Self::FullyCharged,
-            5 => Self::PendingCharge,
-            6 => Self::PendingDischarge,
+            2 | 3 => Self::Discharging,
+            4 => Self::Full,
             _ => Self::Unknown,
         }
     }

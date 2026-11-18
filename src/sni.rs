@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use zbus::{
     Connection, fdo, interface,
     object_server::SignalEmitter,
-    zvariant::{ObjectPath, OwnedValue, StructureBuilder, Type, Value},
+    zvariant::{ObjectPath, OwnedValue, Type, Value},
 };
 
 const ITEM_PATH: &str = "/StatusNotifierItem";
@@ -17,9 +17,6 @@ const MENU_PATH: &str = "/MenuBar";
 trait Watcher {
     fn register_status_notifier_item(&self, service: &str) -> zbus::Result<()>;
 }
-
-/// Icon name, ARGB pixmaps, title and description.
-type ToolTip = (String, Vec<(i32, i32, Vec<u8>)>, String, String);
 
 /// `org.kde.StatusNotifierItem`, plus the Ayatana label extension.
 // ksni does not expose `XAyatanaLabel`, which is the only way to put text
@@ -61,17 +58,6 @@ impl Item {
     }
 
     #[zbus(property)]
-    fn tool_tip(&self) -> ToolTip {
-        let description = self.batteries.iter().map(line).collect::<Vec<_>>();
-        (
-            String::new(),
-            Vec::new(),
-            "Device batteries".into(),
-            description.join("\n"),
-        )
-    }
-
-    #[zbus(property)]
     fn menu(&self) -> ObjectPath<'_> {
         ObjectPath::from_static_str_unchecked(MENU_PATH)
     }
@@ -102,9 +88,6 @@ impl Item {
     #[zbus(signal)]
     async fn new_icon(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
 
-    #[zbus(signal)]
-    async fn new_tool_tip(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
-
     #[zbus(signal, name = "XAyatanaNewLabel")]
     async fn new_label(emitter: &SignalEmitter<'_>, label: &str, guide: &str) -> zbus::Result<()>;
 }
@@ -131,15 +114,25 @@ fn owned(value: impl Into<Value<'static>>) -> OwnedValue {
         .expect("menu values MUST NOT contain file descriptors")
 }
 
-#[derive(Debug, Type, serde::Serialize)]
+#[derive(Debug, Type, Value, serde::Serialize)]
 struct Layout {
     id: i32,
     properties: Props,
     children: Vec<OwnedValue>,
 }
 
+impl Layout {
+    fn leaf((id, properties): (i32, Props)) -> Self {
+        Self {
+            id,
+            properties,
+            children: Vec::new(),
+        }
+    }
+}
+
 impl Menu {
-    fn items(&self) -> Vec<(i32, Props)> {
+    fn items(&self) -> impl Iterator<Item = (i32, Props)> + '_ {
         let devices = (FIRST_DEVICE_ID..).zip(&self.batteries).map(|(id, it)| {
             let props = Props::from([
                 ("label".into(), owned(line(it))),
@@ -161,7 +154,7 @@ impl Menu {
                 ]),
             ),
         ];
-        devices.chain(tail).collect()
+        devices.chain(tail)
     }
 }
 
@@ -170,43 +163,25 @@ impl Menu {
     fn get_layout(
         &self,
         parent_id: i32,
-        _recursion_depth: i32,
+        recursion_depth: i32,
         _property_names: Vec<String>,
     ) -> fdo::Result<(u32, Layout)> {
-        if parent_id != ROOT_ID {
-            return self
-                .items()
-                .into_iter()
+        let mut items = self.items();
+        let layout = match parent_id {
+            ROOT_ID => Layout {
+                id: ROOT_ID,
+                properties: Props::from([("children-display".into(), owned("submenu"))]),
+                children: match recursion_depth {
+                    0 => Vec::new(),
+                    _ => items.map(|it| owned(Layout::leaf(it))).collect(),
+                },
+            },
+            _ => items
                 .find(|(id, _)| *id == parent_id)
-                .map(|(id, properties)| {
-                    let layout = Layout {
-                        id,
-                        properties,
-                        children: Vec::new(),
-                    };
-                    (self.revision, layout)
-                })
-                .ok_or_else(|| fdo::Error::InvalidArgs("unknown menu id".into()));
-        }
-        let children = self
-            .items()
-            .into_iter()
-            .map(|(id, properties)| {
-                let structure = StructureBuilder::new()
-                    .add_field(id)
-                    .add_field(properties)
-                    .add_field(Vec::<OwnedValue>::new())
-                    .build()
-                    .expect("menu item structure MUST have fields");
-                owned(structure)
-            })
-            .collect();
-        let root = Layout {
-            id: ROOT_ID,
-            properties: Props::from([("children-display".into(), owned("submenu"))]),
-            children,
+                .map(Layout::leaf)
+                .ok_or_else(|| fdo::Error::InvalidArgs("unknown menu id".into()))?,
         };
-        Ok((self.revision, root))
+        Ok((self.revision, layout))
     }
 
     fn get_group_properties(
@@ -215,14 +190,12 @@ impl Menu {
         _property_names: Vec<String>,
     ) -> Vec<(i32, Props)> {
         self.items()
-            .into_iter()
             .filter(|(id, _)| ids.is_empty() || ids.contains(id))
             .collect()
     }
 
     fn get_property(&self, id: i32, name: &str) -> fdo::Result<OwnedValue> {
         self.items()
-            .into_iter()
             .find(|(it, _)| *it == id)
             .and_then(|(_, mut props)| props.remove(name))
             .ok_or_else(|| fdo::Error::InvalidArgs("unknown menu property".into()))
@@ -300,7 +273,6 @@ pub async fn update(conn: &Connection, batteries: Vec<Battery>) -> zbus::Result<
     item.get_mut().await.batteries = batteries.clone();
     let emitter = item.signal_emitter();
     Item::new_icon(emitter).await?;
-    Item::new_tool_tip(emitter).await?;
     Item::new_label(emitter, &text, "").await?;
 
     let menu = server.interface::<_, Menu>(MENU_PATH).await?;

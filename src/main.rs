@@ -43,11 +43,8 @@ fn run() -> anyhow::Result<()> {
         let mut ticker = tokio::time::interval(POLL);
         loop {
             ticker.tick().await;
-            let result = match upower::peripherals(&system).await {
-                Ok(batteries) => sni::update(&session, batteries).await,
-                Err(e) => Err(e),
-            };
-            if let Err(e) = result {
+            let batteries = upower::peripherals(&system).await;
+            if let Err(e) = async { sni::update(&session, batteries?).await }.await {
                 eprintln!("update: {e}");
             }
         }
@@ -58,7 +55,7 @@ fn run() -> anyhow::Result<()> {
 #[cfg(target_os = "macos")]
 fn run() -> anyhow::Result<()> {
     let runtime = runtime()?;
-    menubar::run(move |updater| {
+    menubar::run(move |proxy| {
         std::thread::spawn(move || {
             runtime.block_on(async {
                 let mut ticker = tokio::time::interval(POLL);
@@ -68,7 +65,8 @@ fn run() -> anyhow::Result<()> {
                     if let Err(e) = &update {
                         eprintln!("update: {e}");
                     }
-                    updater.send(update);
+                    // Fails only once the event loop has exited, i.e. while quitting.
+                    let _ = proxy.send_event(update);
                 }
             })
         });

@@ -19,20 +19,12 @@ impl Battery {
     }
 }
 
-/// Charging state, modelled on `org.freedesktop.UPower.Device.State`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(
-    not(target_os = "linux"),
-    expect(dead_code, reason = "only UPower reports some states")
-)]
 pub enum State {
     Unknown,
     Charging,
     Discharging,
-    Empty,
-    FullyCharged,
-    PendingCharge,
-    PendingDischarge,
+    Full,
 }
 
 impl fmt::Display for State {
@@ -41,10 +33,7 @@ impl fmt::Display for State {
             Self::Unknown => "unknown",
             Self::Charging => "charging",
             Self::Discharging => "discharging",
-            Self::Empty => "empty",
-            Self::FullyCharged => "full",
-            Self::PendingCharge => "pending charge",
-            Self::PendingDischarge => "pending discharge",
+            Self::Full => "full",
         })
     }
 }

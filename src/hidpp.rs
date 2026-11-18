@@ -36,10 +36,9 @@ const UNIFIED_BATTERY: u16 = 0x1004;
 /// Reply payload after the four header bytes, zero-padded.
 type Params = [u8; 16];
 
-/// Turns a battery reply into a percentage and state.
 type Parse = fn(Params) -> (f64, State);
 
-/// Battery features by preference, with the function that reads the level.
+/// Battery features in order of preference: id, function, parser.
 const BATTERY_FEATURES: [(u16, u8, Parse); 3] = [
     (UNIFIED_BATTERY, 1, unified),
     (BATTERY_STATUS, 0, battery_status),
@@ -163,7 +162,7 @@ fn charging(status: u8) -> State {
     match status {
         0 => State::Discharging,
         1 | 2 | 4 => State::Charging,
-        3 => State::FullyCharged,
+        3 => State::Full,
         _ => State::Unknown,
     }
 }
@@ -194,7 +193,7 @@ fn voltage(params: Params) -> (f64, State) {
     let [high, low, flags, ..] = params;
     let state = match (flags & 0x80 != 0, flags & 0x03) {
         (false, _) => State::Discharging,
-        (true, 1) => State::FullyCharged,
+        (true, 1) => State::Full,
         (true, _) => State::Charging,
     };
     let millivolts = u16::from_be_bytes([high, low]);
@@ -210,10 +209,7 @@ fn battery_replies() {
     };
     assert_eq!(unified(params(&[37, 4, 0])), (37.0, State::Discharging));
     assert_eq!(unified(params(&[0, 2, 1])), (20.0, State::Charging));
-    assert_eq!(
-        battery_status(params(&[50, 20, 3])),
-        (50.0, State::FullyCharged)
-    );
+    assert_eq!(battery_status(params(&[50, 20, 3])), (50.0, State::Full));
     // 3811 mV, discharging.
     assert_eq!(
         voltage(params(&[0x0e, 0xe3, 0x00])),
@@ -223,10 +219,7 @@ fn battery_replies() {
         voltage(params(&[0x0e, 0xe3, 0x80])),
         (50.0, State::Charging)
     );
-    assert_eq!(
-        voltage(params(&[0x0e, 0xe3, 0x81])),
-        (50.0, State::FullyCharged)
-    );
+    assert_eq!(voltage(params(&[0x0e, 0xe3, 0x81])), (50.0, State::Full));
 }
 
 /// Li-ion discharge curve from Solaar, in millivolts and percent.
@@ -249,10 +242,9 @@ const CURVE: [(u16, u8); 13] = [
 /// Linear interpolation on [`CURVE`], clamped to 0..=100.
 fn voltage_percentage(millivolts: u16) -> u8 {
     CURVE
-        .iter()
-        .zip(CURVE.iter().skip(1))
-        .find(|(_, (low, _))| millivolts >= *low)
-        .map_or(0, |(&(v_high, p_high), &(v_low, p_low))| {
+        .array_windows()
+        .find(|[_, (low, _)]| millivolts >= *low)
+        .map_or(0, |&[(v_high, p_high), (v_low, p_low)]| {
             let t = (f64::from(millivolts - v_low) / f64::from(v_high - v_low)).min(1.0);
             let percent = f64::from(p_low) + f64::from(p_high - p_low) * t;
             // In 0..=100 by construction.
