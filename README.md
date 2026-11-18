@@ -50,3 +50,9 @@ Input Monitoring permission.
 
 Bump `version` in `Cargo.toml`, then push a matching `v*` tag.
 The release workflow builds the `.deb` and attaches it to a GitHub release.
+
+## Licence
+
+[PolyForm Strict 1.0.0](LICENSE.md).
+You may view the source and use the software for any noncommercial purpose.
+You may not modify it, build new works from it, or redistribute it.
