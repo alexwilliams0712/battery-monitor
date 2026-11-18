@@ -19,7 +19,6 @@ It shows every peripheral battery Ubuntu knows about.
    setsid -f battery-monitor
    ```
 
-   Type your password when asked. Nothing appears on screen as you type.
 3. Your battery levels appear at the top right of the screen.
    It starts by itself every time you log in.
 
