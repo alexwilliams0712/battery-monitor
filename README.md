@@ -39,14 +39,49 @@ sed "s|^Exec=.*|Exec=$HOME/.cargo/bin/battery-monitor|" battery-monitor.desktop 
 ```
 
 Check what UPower sees with `upower -d`.
-A device missing there needs a direct HID++ backend over hidraw.
+`battery-monitor --hidpp` prints what the macOS HID++ backend reads over
+hidraw, for comparison.
+Levels from battery voltage can differ by a point, because the kernel and
+Solaar use different discharge curves.
 
 ## macOS
 
-Planned.
-macOS has no kernel HID++ support, so it needs a direct HID++ backend
-(`hidapi`, features 0x1000/0x1001/0x1004) and a signed app bundle for the
-Input Monitoring permission.
+macOS has no kernel HID++ support, so the app talks HID++ 2.0 to Logitech
+Unifying, Lightspeed and Bolt receivers itself (battery features 0x1004,
+0x1000 and 0x1001, as Solaar does).
+The menu bar shows the same text as on Ubuntu, and its menu lists every
+device and Quit.
+Devices paired directly over Bluetooth are not read yet.
+
+```sh
+cargo install --path .
+battery-monitor --hidpp   # read once and print, to check access
+battery-monitor &
+```
+
+If no devices appear, allow the binary (or the terminal that starts it) in
+System Settings > Privacy & Security > Input Monitoring, then restart it.
+
+To start it at login, add the binary in System Settings > General >
+Login Items, or load a LaunchAgent:
+
+```sh
+cat > ~/Library/LaunchAgents/battery-monitor.plist <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>battery-monitor</string>
+  <key>ProgramArguments</key><array><string>$HOME/.cargo/bin/battery-monitor</string></array>
+  <key>RunAtLoad</key><true/>
+</dict>
+</plist>
+EOF
+launchctl load ~/Library/LaunchAgents/battery-monitor.plist
+```
+
+Next steps: a signed and notarised app bundle, so the Input Monitoring grant
+survives rebuilds, and a Homebrew cask.
 
 ## Releasing
 
