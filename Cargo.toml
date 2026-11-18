@@ -3,6 +3,8 @@ name = "logi-battery-tray"
 version = "0.1.0"
 edition = "2024"
 description = "Tray icon showing battery levels of wireless peripherals"
+authors = ["alexwilliams0712"]
+publish = false
 license = "PolyForm-Strict-1.0.0"
 repository = "https://github.com/alexwilliams0712/logi-battery-tray"
 
