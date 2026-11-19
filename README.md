@@ -8,7 +8,8 @@ Click it to see each device with its charging state.
 ## Ubuntu
 
 Works with Ubuntu 22.04 or newer on a 64-bit Intel or AMD PC.
-It shows every peripheral battery Ubuntu knows about.
+It shows every peripheral battery Ubuntu knows about,
+plus devices on Logitech receivers too new for Ubuntu to support.
 
 1. Open the [latest release](https://github.com/alexwilliams0712/battery-monitor/releases/latest)
    and download the file ending in `_amd64.deb`.
