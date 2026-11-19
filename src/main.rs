@@ -16,7 +16,7 @@ const POLL: Duration = Duration::from_secs(30);
 fn main() -> anyhow::Result<()> {
     // Hidden debug aid: on Linux it bypasses UPower.
     if std::env::args().any(|it| it == "--hidpp") {
-        let batteries = runtime()?.block_on(hidpp::batteries())?;
+        let batteries = runtime()?.block_on(hidpp::batteries(&[]))?;
         println!("{}", battery::label(&batteries));
         batteries
             .iter()
@@ -59,11 +59,13 @@ fn run() -> anyhow::Result<()> {
         std::thread::spawn(move || {
             runtime.block_on(async {
                 let mut ticker = tokio::time::interval(POLL);
+                let mut last = Vec::new();
                 loop {
                     ticker.tick().await;
-                    let update = hidpp::batteries().await.map_err(|e| e.to_string());
-                    if let Err(e) = &update {
-                        eprintln!("update: {e}");
+                    let update = hidpp::batteries(&last).await.map_err(|e| e.to_string());
+                    match &update {
+                        Ok(it) => last.clone_from(it),
+                        Err(e) => eprintln!("update: {e}"),
                     }
                     // Fails only once the event loop has exited, i.e. while quitting.
                     let _ = proxy.send_event(update);
