@@ -14,7 +14,7 @@ use tokio::runtime::{Builder, Runtime};
 const POLL: Duration = Duration::from_secs(30);
 
 fn main() -> anyhow::Result<()> {
-    // Hidden debug aid: on Linux it bypasses UPower.
+    // Hidden debug aid: HID++ only, without UPower or the cache.
     if std::env::args().any(|it| it == "--hidpp") {
         let batteries = runtime()?.block_on(hidpp::batteries(&[]))?;
         println!("{}", battery::label(&batteries));
@@ -41,10 +41,17 @@ fn run() -> anyhow::Result<()> {
             tokio::time::sleep(Duration::from_secs(2)).await;
         }
         let mut ticker = tokio::time::interval(POLL);
+        let mut hidpp = Vec::new();
         loop {
             ticker.tick().await;
+            // Without hidraw access UPower still covers the kernel's receivers.
+            match hidpp::batteries(&hidpp).await {
+                Ok(it) => hidpp = it,
+                Err(e) => eprintln!("hidpp: {e}"),
+            }
             let batteries = upower::peripherals(&system).await;
-            if let Err(e) = async { sni::update(&session, batteries?).await }.await {
+            let update = async { sni::update(&session, upower::merge(batteries?, &hidpp)).await };
+            if let Err(e) = update.await {
                 eprintln!("update: {e}");
             }
         }
