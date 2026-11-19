@@ -61,3 +61,59 @@ pub async fn peripherals(conn: &Connection) -> zbus::Result<Vec<Battery>> {
     out.sort_by(|a, b| a.model.cmp(&b.model));
     Ok(out)
 }
+
+/// `upower` plus HID++ readings for devices it lacks, matched by model.
+// The kernel drives only the receivers it lists, e.g. not the Lightspeed `c545`,
+// so devices paired with newer receivers reach UPower late or never.
+pub fn merge(mut upower: Vec<Battery>, hidpp: &[Battery]) -> Vec<Battery> {
+    let extra: Vec<_> = hidpp
+        .iter()
+        .filter(|it| !upower.iter().any(|known| known.model == it.model))
+        .map(|it| Battery {
+            icon_name: icon_name(it.percentage, it.state),
+            ..it.clone()
+        })
+        .collect();
+    upower.extend(extra);
+    upower.sort_by(|a, b| a.model.cmp(&b.model));
+    upower
+}
+
+/// The icon UPower would give this level, e.g. `battery-level-30-charging-symbolic`.
+fn icon_name(percentage: f64, state: State) -> String {
+    let level = (percentage / 10.0).round() * 10.0;
+    let suffix = match state {
+        State::Charging => "-charging",
+        State::Full => "-charged",
+        State::Unknown | State::Discharging => "",
+    };
+    format!("battery-level-{level:.0}{suffix}-symbolic")
+}
+
+#[test]
+fn merge_prefers_upower() {
+    let battery = |model: &str, percentage| Battery {
+        model: model.into(),
+        percentage,
+        state: State::Discharging,
+        icon_name: String::new(),
+    };
+    let merged = merge(
+        vec![battery("Logitech G502", 10.0)],
+        &[
+            battery("Logitech G915 TKL", 93.0),
+            battery("Logitech G502", 50.0),
+        ],
+    );
+    let got: Vec<_> = merged
+        .iter()
+        .map(|it| (it.model.as_str(), it.percentage, it.icon_name.as_str()))
+        .collect();
+    assert_eq!(
+        got,
+        [
+            ("Logitech G502", 10.0, ""),
+            ("Logitech G915 TKL", 93.0, "battery-level-90-symbolic"),
+        ]
+    );
+}
