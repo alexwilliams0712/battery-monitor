@@ -1,4 +1,12 @@
-use crate::battery::{Battery, label, line};
+use crate::battery::{Battery, DIVIDER, State, line};
+use objc2::{MainThreadMarker, rc::Retained};
+use objc2_app_kit::{
+    NSAttributedStringAttachmentConveniences as _, NSColor, NSImage, NSImageSymbolConfiguration,
+    NSTextAttachment,
+};
+use objc2_foundation::{
+    NSArray, NSAttributedString, NSMutableAttributedString, NSPoint, NSRect, NSSize, NSString,
+};
 use tao::{
     event::{Event, StartCause},
     event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy},
@@ -54,12 +62,72 @@ pub fn run(spawn: impl FnOnce(EventLoopProxy<Update>)) -> ! {
 }
 
 fn show(tray: &TrayIcon, update: &Update) {
-    let text = update.as_deref().map(label).unwrap_or_default();
-    match text.is_empty() {
-        true => tray.set_title(Some(FALLBACK_TITLE)),
-        false => tray.set_title(Some(text)),
+    match update.as_deref() {
+        Ok(batteries) if !batteries.is_empty() => {
+            let main_thread =
+                MainThreadMarker::new().expect("AppKit updates run on the main thread");
+            if let Some(button) = tray
+                .ns_status_item()
+                .and_then(|item| item.button(main_thread))
+            {
+                button.setAttributedTitle(&title(batteries));
+            }
+        }
+        _ => tray.set_title(Some(FALLBACK_TITLE)),
     }
     tray.set_menu(Some(Box::new(menu(update))));
+}
+
+fn title(batteries: &[Battery]) -> Retained<NSMutableAttributedString> {
+    let text = NSMutableAttributedString::new();
+    let append = |s: &str| {
+        text.appendAttributedString(&NSAttributedString::from_nsstring(&NSString::from_str(s)))
+    };
+    for (ix, battery) in batteries.iter().enumerate() {
+        if ix > 0 {
+            append(DIVIDER);
+        }
+        match battery_icon(battery) {
+            Some(icon) => text.appendAttributedString(&icon),
+            None if battery.state == State::Charging => append("⚡︎▯"),
+            None => append("▯"),
+        }
+        append(&format!(" {}", battery.label(batteries.len())));
+    }
+    text
+}
+
+fn battery_icon(battery: &Battery) -> Option<Retained<NSAttributedString>> {
+    if !objc2::available!(macos = 11.0) {
+        return None;
+    }
+    let charging = battery.state == State::Charging;
+    let symbol = match (charging, battery.percentage.round() as u8) {
+        (true, _) => "battery.100.bolt",
+        (_, 0..=12) => "battery.0",
+        (_, 13..=37) => "battery.25",
+        (_, 38..=62) => "battery.50",
+        (_, 63..=87) => "battery.75",
+        _ => "battery.100",
+    };
+    let mut image = NSImage::imageWithSystemSymbolName_accessibilityDescription(
+        &NSString::from_str(symbol),
+        Some(&NSString::from_str(&battery.state.to_string())),
+    )?;
+    if charging && objc2::available!(macos = 12.0) {
+        let colours = NSArray::from_retained_slice(&[NSColor::systemGreenColor()]);
+        let config = NSImageSymbolConfiguration::configurationWithPaletteColors(&colours);
+        image = image.imageWithSymbolConfiguration(&config).unwrap_or(image);
+    }
+    let attachment = NSTextAttachment::new();
+    attachment.setImage(Some(&image));
+    attachment.setBounds(NSRect::new(
+        NSPoint::new(0.0, -2.0),
+        NSSize::new(18.0, 12.0),
+    ));
+    Some(NSAttributedString::attributedStringWithAttachment(
+        &attachment,
+    ))
 }
 
 fn menu(update: &Update) -> Menu {
