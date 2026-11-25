@@ -1,23 +1,68 @@
 name: release
 
 on:
+  pull_request_target:
+    branches: [main]
+    types: [closed]
   push:
     tags: ["v*"]
 
-permissions:
-  contents: write
-
 jobs:
   deb:
+    if: github.event_name == 'push' || github.event.pull_request.merged
+    permissions:
+      contents: write
+    concurrency: release-${{ github.event.pull_request.merge_commit_sha || github.sha }}
     # Oldest supported runner, so the binary's glibc floor stays low.
     runs-on: ubuntu-22.04
     steps:
+      # For a merged PR, check out the commit accepted into main, including for forks.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
-      - name: Check tag matches Cargo.toml version
-        run: test "$GITHUB_REF_NAME" = "v$(cargo pkgid | sed 's/.*[#@]//')"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prepare package version
+        id: package
+        run: |
+          if [[ $GITHUB_EVENT_NAME == pull_request_target ]]; then
+            version=$(python .github/release-version.py)
+            sed -i "/^\[package\]$/,/^\[/{s/^version = .*/version = \"$version\"/;}" Cargo.toml
+            cargo update --workspace
+          else
+            version=$(cargo pkgid --locked | sed 's/.*[#@]//')
+            test "$GITHUB_REF_NAME" = "v$version"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - run: cargo install cargo-deb --locked
-      - run: cargo deb
-      - run: gh release create "$GITHUB_REF_NAME" target/debian/*.deb --generate-notes
+      - run: cargo deb --locked
+      - name: Publish the Debian package
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          tag="v$VERSION"
+          sha=$(git rev-parse HEAD)
+          asset="target/debian/battery-monitor_${VERSION}-1_amd64.deb"
+          test "$(dpkg-deb -f "$asset" Version)" = "$VERSION-1"
+
+          if git show-ref --verify --quiet "refs/tags/$tag"; then
+            test "$(git rev-parse "refs/tags/$tag^{commit}")" = "$sha"
+          else
+            gh api --silent "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$sha"
+          fi
+          if release=$(gh release view "$tag" --json isDraft,assets); then
+            if [[ $(jq -r .isDraft <<< "$release") == false ]]; then
+              jq -e --arg name "${asset##*/}" 'any(.assets[]; .name == $name and .state == "uploaded")' <<< "$release"
+              exit 0
+            fi
+          else
+            gh release create "$tag" --draft --verify-tag --generate-notes
+          fi
+          gh release upload "$tag" "$asset" --clobber
+          id=$(gh release view "$tag" --json databaseId --jq .databaseId)
+          gh api --silent --method PATCH "repos/$GITHUB_REPOSITORY/releases/$id" -F draft=false -f make_latest=legacy

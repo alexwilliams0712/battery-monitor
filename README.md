@@ -82,7 +82,16 @@ cargo uninstall battery-monitor
 
 ## Releasing
 
-Bump `version` in `Cargo.toml`, then push a matching `v*` tag.
+Each pull request merged into `main` publishes a GitHub release with the amd64
+Debian package. The release tag points to the merged commit.
+
+`Cargo.toml` sets the baseline version. Each first-parent commit on `main`
+after that version was introduced adds one to the patch number. For example,
+the first merge after `0.4.0` produces `v0.4.1`. The workflow sets the package
+version in its build checkout. To start a new minor or major series, change
+the baseline in `Cargo.toml` and update `Cargo.lock` in a PR.
+
+A manually pushed tag matching the manifest version can also publish a release.
 
 ## Licence
 
