@@ -1,8 +1,9 @@
 # battery-monitor
 
-Shows wireless peripheral battery levels in the Ubuntu top bar or macOS menu bar,
-e.g. `G502 12%  G915 TKL 37%`.
-With more than four devices it shows only the percentages.
+Shows wireless peripheral battery levels in the Ubuntu top bar or macOS menu bar.
+Each device has its own small battery icon. A green battery with a lightning bolt
+shows which device is charging. Devices stay in name order, separated by a pipe,
+e.g. `G502 12%  │  G915 TKL 37%`. With more than four devices the bar drops the names.
 Click it to see each device with its charging state.
 
 ## Ubuntu

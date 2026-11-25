@@ -1,4 +1,4 @@
-use crate::battery::{Battery, State};
+use crate::battery::{Battery, Device, State};
 use async_hid::{AsyncHidRead as _, AsyncHidWrite as _, DeviceReaderWriter, HidBackend, HidResult};
 use core::{ops::RangeInclusive, time::Duration};
 use futures_lite::StreamExt as _;
@@ -24,6 +24,7 @@ const SOFTWARE_ID: u8 = 0x0c;
 const RECEIVER: u8 = 0xff;
 const READ_LONG_REGISTER: u8 = 0x83;
 const RECEIVER_INFO: u8 = 0xb5;
+const EXTENDED_PAIRING_INFO: u8 = 0x30;
 const CODENAME: u8 = 0x40;
 
 const ROOT: u8 = 0x00;
@@ -64,12 +65,12 @@ impl Request {
         }
     }
 
-    const fn codename(device: u8) -> Self {
+    const fn receiver_info(device: u8, register: u8) -> Self {
         Self {
             device: RECEIVER,
             sub_id: READ_LONG_REGISTER,
             address: RECEIVER_INFO,
-            params: [CODENAME + device - 1, 0, 0],
+            params: [register + device - 1, 0, 0],
         }
     }
 
@@ -147,7 +148,7 @@ fn request_round_trip() {
 
 #[test]
 fn codename_reply_must_echo_device() {
-    let request = Request::codename(2);
+    let request = Request::receiver_info(2, CODENAME);
     assert_eq!(request.encode(), [0x10, 0xff, 0x83, 0xb5, 0x41, 0, 0]);
     let mut reply = [0; 20];
     reply[..10].copy_from_slice(&[0x11, 0xff, 0x83, 0xb5, 0x41, 4, b'G', b'5', b'0', b'2']);
@@ -284,10 +285,26 @@ fn models() {
     assert_eq!(model(b"\0\0"), None);
 }
 
-/// Batteries of devices paired with Logitech receivers, read over HID++ 2.0.
+pub struct PairedDevice {
+    pub device: Device,
+    pub reading: Option<(f64, State)>,
+}
+
+impl PairedDevice {
+    pub fn battery(&self) -> Option<Battery> {
+        self.reading.map(|(percentage, state)| Battery {
+            device: self.device.clone(),
+            percentage,
+            state,
+            icon_name: String::new(),
+        })
+    }
+}
+
+/// Devices paired with Logitech receivers, read over HID++.
 /// Sleeping devices cannot answer, so they keep their reading from `last`,
 /// as the Linux kernel does.
-pub async fn batteries(last: &[Battery]) -> HidResult<Vec<Battery>> {
+pub async fn devices(last: &[PairedDevice]) -> HidResult<Vec<PairedDevice>> {
     let backend = HidBackend::default();
     let mut receivers = backend.enumerate().await?.filter(|it| {
         it.vendor_id == LOGITECH
@@ -304,36 +321,53 @@ pub async fn batteries(last: &[Battery]) -> HidResult<Vec<Battery>> {
         seen.push(receiver.id.clone());
         let mut io = receiver.open().await?;
         for device in PAIRED {
-            out.extend(battery(&mut io, device, last).await?);
+            out.extend(paired_device(&mut io, device, last).await?);
         }
     }
-    out.sort_by(|a, b| a.model.cmp(&b.model));
+    out.sort_by(|a, b| a.device.sort_key().cmp(&b.device.sort_key()));
     Ok(out)
 }
 
-async fn battery(
+async fn paired_device(
     io: &mut DeviceReaderWriter,
     device: u8,
-    last: &[Battery],
-) -> HidResult<Option<Battery>> {
+    last: &[PairedDevice],
+) -> HidResult<Option<PairedDevice>> {
     let ping = Request::feature(device, ROOT, 1, [0, 0, 0x5a]);
-    if call(io, ping).await?.is_none() {
-        // The receiver knows a sleeping device's codename; an empty slot has none.
-        let asleep = codename(io, device).await?;
-        return Ok(asleep.and_then(|model| last.iter().find(|it| it.model == model).cloned()));
-    }
+    let awake = call(io, ping).await?.is_some();
+    // Pairing information stays readable while the device is on its charging cable.
+    let model = match codename(io, device).await? {
+        Some(model) => model,
+        None if awake => name(io, device).await?,
+        None => return Ok(None),
+    };
+    let serial = call(io, Request::receiver_info(device, EXTENDED_PAIRING_INFO))
+        .await?
+        .and_then(|[_, a, b, c, d, ..]| {
+            let serial = u32::from_be_bytes([a, b, c, d]);
+            (serial != 0 && serial != u32::MAX).then_some(serial)
+        });
+    let identity = Device { model, serial };
+    let reading = match awake {
+        true => reading(io, device).await?,
+        false => last
+            .iter()
+            .find(|it| it.device.matches(&identity))
+            .and_then(|it| it.reading),
+    };
+    Ok(Some(PairedDevice {
+        device: identity,
+        reading,
+    }))
+}
+
+async fn reading(io: &mut DeviceReaderWriter, device: u8) -> HidResult<Option<(f64, State)>> {
     for (id, function, parse) in BATTERY_FEATURES {
         if let Some(index) = feature(io, device, id).await?
             && let Some(params) =
                 call(io, Request::feature(device, index, function, [0; 3])).await?
         {
-            let (percentage, state) = parse(params);
-            return Ok(Some(Battery {
-                model: name(io, device).await?,
-                percentage,
-                state,
-                icon_name: String::new(),
-            }));
+            return Ok(Some(parse(params)));
         }
     }
     Ok(None)
@@ -348,17 +382,14 @@ async fn feature(io: &mut DeviceReaderWriter, device: u8, id: u16) -> HidResult<
 
 /// The model from the codename the receiver stores, as Linux uses.
 async fn codename(io: &mut DeviceReaderWriter, device: u8) -> HidResult<Option<String>> {
-    let reply = call(io, Request::codename(device)).await?;
+    let reply = call(io, Request::receiver_info(device, CODENAME)).await?;
     Ok(reply.and_then(|[_, len, codename @ ..]| {
         model(codename.get(..usize::from(len)).unwrap_or(&codename))
     }))
 }
 
-/// The receiver's codename, else the device's marketing name.
+/// The device's marketing name, for receivers without a codename.
 async fn name(io: &mut DeviceReaderWriter, device: u8) -> HidResult<String> {
-    if let Some(it) = codename(io, device).await? {
-        return Ok(it);
-    }
     if let Some(index) = feature(io, device, DEVICE_NAME).await?
         && let Some([len, ..]) = call(io, Request::feature(device, index, 0, [0; 3])).await?
     {
